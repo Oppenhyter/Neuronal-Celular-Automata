@@ -13,18 +13,18 @@ class Cell_Phase:
     REFRACT = 3
 
     PHASE_TRANSITION = {
-        0 : lambda n, Tr: 1 if Cell_Phase.exceed_tr(n, Tr) else 0,
-        1 : lambda n, Tr: 2,
-        2 : lambda n, Tr: 3,
-        3 : lambda n, Tr: 1 if Cell_Phase.exceed_tr(n, Tr) else 0 ,
+        0 : lambda n, Tr, a: 1 if Cell_Phase.exceed_tr(n, Tr, a) else 0,
+        1 : lambda n, Tr, a: 2,
+        2 : lambda n, Tr, a: 3,
+        3 : lambda n, Tr, a: 1 if Cell_Phase.exceed_tr(n, Tr, a) else 0 ,
     }
 
-    def exceed_tr( neighbors, tr:float)-> bool:
+    def exceed_tr(neighbors:List, tr:float, a:float)-> bool:
         neighbor_type_count = Counter([c.type for c in neighbors])
         n_hyp = list(filter(lambda c: c.state==Cell_Phase.HYPER, neighbors))
         n_ex  = neighbor_type_count['E']
         n_in  = neighbor_type_count['I']
-        return (n_ex - n_in - len(n_hyp)) >= tr
+        return (n_ex - n_in - a*len(n_hyp)) >= tr
 
 
 class Neuron:
@@ -44,7 +44,7 @@ class Neuron:
 
 class Neuronal_Lattice:
 
-    def __init__(self, lattice_size:int, T_rest:float=8, T_rel:float=12, N_min:int=30, N_Max:int=61, percent_inhibit:float = 0.2):
+    def __init__(self, lattice_size:int, T_rest:float=8, T_rel:float=12, N_min:int=30, N_Max:int=61, a:float=0.5, percent_inhibit:float = 0.2):
         '''
         Initialize our CA
         '''
@@ -52,6 +52,7 @@ class Neuronal_Lattice:
         self.T_rel = T_rel
         self.N_min = N_min
         self.N_max = N_Max
+        self.a = a
         self.perc_i = percent_inhibit
         self.init_lattice(lattice_size)
         self.pt = Cell_Phase().PHASE_TRANSITION
@@ -108,7 +109,7 @@ class Neuronal_Lattice:
 
         tr = self.T_rest if cell.state == 0 else self.T_rel
         n_cell = cell
-        n_cell.state = self.pt[cell.state](cell.neighbors, tr)
+        n_cell.state = self.pt[cell.state](cell.neighbors, tr, self.a)
         return n_cell
         
     def states(self) -> None:
@@ -124,8 +125,8 @@ class Neuronal_Lattice:
 #%% Entry Point
 if __name__ == '__main__':
     # generate lattice
-    SIZE = 100
-    NL = Neuronal_Lattice(SIZE)
+    SIZE = 40
+    NL = Neuronal_Lattice(SIZE, a=0.6)
     ITERATIONS = 10
 
     fig , ax = plt.subplots()
@@ -138,7 +139,7 @@ if __name__ == '__main__':
         img.set_array(mat)
         return [img]
     
-    animation = FuncAnimation(fig, update, frames=ITERATIONS,repeat=True, interval=100, blit=True)
+    animation = FuncAnimation(fig, update, frames=ITERATIONS,repeat=True, interval=50, blit=True)
 
     plt.show()
             
