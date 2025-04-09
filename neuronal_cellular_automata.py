@@ -3,6 +3,8 @@ from matplotlib import pyplot as plt
 from random import choice
 from collections import Counter
 from typing import List
+from  matplotlib.animation import FuncAnimation
+
 
 class Cell_Phase:
     REST = 0
@@ -20,7 +22,6 @@ class Cell_Phase:
     def exceed_tr( neighbors, tr:float)-> bool:
         neighbor_type_count = Counter([c.type for c in neighbors])
         n_hyp = list(filter(lambda c: c.state==Cell_Phase.HYPER, neighbors))
-
         n_ex  = neighbor_type_count['E']
         n_in  = neighbor_type_count['I']
         return (n_ex - n_in - len(n_hyp)) >= tr
@@ -43,7 +44,7 @@ class Neuron:
 
 class Neuronal_Lattice:
 
-    def __init__(self, lattice_size:int, T_rest:float=8, T_rel:float=12, N_min:int=14, N_Max:int=60, percent_inhibit:float = 0.2):
+    def __init__(self, lattice_size:int, T_rest:float=8, T_rel:float=12, N_min:int=30, N_Max:int=61, percent_inhibit:float = 0.2):
         '''
         Initialize our CA
         '''
@@ -54,6 +55,7 @@ class Neuronal_Lattice:
         self.perc_i = percent_inhibit
         self.init_lattice(lattice_size)
         self.pt = Cell_Phase().PHASE_TRANSITION
+
 
     def init_lattice(self, size:int):
         '''
@@ -94,7 +96,8 @@ class Neuronal_Lattice:
         '''
         Iterate over all cells and calculate their next states based on their neighbors.
         ''' 
-        [[self.next_state(cell) for cell in row] for row in self.lattice]
+        next_lattice = [[self.next_state(cell) for cell in row] for row in self.lattice]
+        self.lattice = next_lattice
 
     def next_state(self, cell:Neuron) -> None:
         '''
@@ -102,30 +105,40 @@ class Neuronal_Lattice:
 
         * **cell** Neuron: the cell for which we are calculating the next state.
         '''
-        
 
         tr = self.T_rest if cell.state == 0 else self.T_rel
-        cell.state = self.pt[cell.state](cell.neighbors, tr)
+        n_cell = cell
+        n_cell.state = self.pt[cell.state](cell.neighbors, tr)
+        return n_cell
         
-    def show(self) -> None:
+    def states(self) -> None:
         '''
         Just a helper method to SEE what's going on in the cells.
         '''
         state_view = [[cell.state for cell in row] for row in self.lattice]
-        plt.matshow(state_view)
-        plt.show()
+        return state_view
+
+        
+
 
 #%% Entry Point
 if __name__ == '__main__':
     # generate lattice
-    SIZE = 20
+    SIZE = 100
     NL = Neuronal_Lattice(SIZE)
-    NL.show()
-    
-    ITERATIONS = 1000
+    ITERATIONS = 10
 
-    for _ in range(ITERATIONS):
+    fig , ax = plt.subplots()
+    init_states = NL.states()
+    img = ax.imshow(init_states ,cmap='gray', interpolation='nearest')
+    
+    def update(f):
         NL.update_lattice()
-        if _ % 100 ==0:
-            NL.show()
+        mat = NL.states()
+        img.set_array(mat)
+        return [img]
+    
+    animation = FuncAnimation(fig, update, frames=ITERATIONS,repeat=True, interval=100, blit=True)
+
+    plt.show()
             
