@@ -126,7 +126,7 @@ class Neuronal_Lattice:
 if __name__ == '__main__':
     # generate lattice
     SIZE = 40
-    NL = Neuronal_Lattice(SIZE, a=0.6)
+    NL = Neuronal_Lattice(SIZE, a=0.8)
     ITERATIONS = 10
 
     fig , ax = plt.subplots()
