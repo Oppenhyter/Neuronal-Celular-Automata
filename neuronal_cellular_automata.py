@@ -1,52 +1,42 @@
 import numpy as np
 from matplotlib import pyplot as plt
-from random import choice
+from random import choice, randint
 from collections import Counter
-from typing import List
+from typing import List, Tuple, Any
 from  matplotlib.animation import FuncAnimation
 
+from scipy import signal
 
 class Phase:
-    REST = 0
-    FIRE = 1
-    HYPER = 2
-    REFRACT = 3
 
-    def transition(x, AP, n ,Tr, a):
-        match AP:
-            case 0:
-                return AP+1 if Phase.exceed_tr(n, Tr, a) else AP
-            case 1 | 2 | 3 | 4:
-                return AP+1 if Phase.exceed_tr(n, Tr, a) else AP
-            case 5:
-                return AP+1 if Phase.exceed_tr(n, Tr, a) else AP
-                #return AP
-            case 6|7|8|9: 
-                return AP+1 if Phase.exceed_tr(n, Tr, a) else AP
-            case 10:
-                return 0 if Phase.exceed_tr(n, Tr, a) else AP
+    #    AP   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    
 
+    def transition(AP, n ,Tr, a):
+        if AP == 10: 
+            next_AP = 0 if Phase.exceed_tr(n, Tr, a) else AP 
+            return next_AP
+        else:
+            next_AP = AP+1 if Phase.exceed_tr(n, Tr, a) else AP 
+            return next_AP
+        
     def exceed_tr(neighbors:List, tr:float, a:float)-> bool:
-        neighbor_type_count = Counter([c.type for c in neighbors if c.state == Phase.FIRE])
-        n_hyp = list(filter(lambda c: c.state==Phase.HYPER, neighbors))
-        n_ex  = neighbor_type_count['E']
-        n_in  = neighbor_type_count['I']
-        return (n_ex - n_in - a*len(n_hyp)) >= tr
+        n_ex = sum([c.state for c in neighbors if c.type == 'E' and c.AP in (1, 2, 3, 4)])
+        n_in = sum([c.state for c in neighbors if c.type == 'I' and c.AP in (1, 2, 3, 4)])
+        n_hyp = sum([c.state for c in neighbors if c.AP == 5])
+        return (n_ex - n_in - a*n_hyp) >= tr
 
-    def get_phase(AP):
-        match AP:
-            case 0 : return Phase.REST
-            case 1 | 2 | 3 | 4: return Phase.FIRE
-            case 5 : return Phase.HYPER
-            case 6 | 7 | 8 | 9 | 10: return Phase.REFRACT
 
 class Neuron:
-    def __init__(self) -> None:
-        self.AP = np.random.randint(0,10)
-        self.state = choice([Phase.HYPER, Phase.REST, 
-                             Phase.FIRE, Phase.REFRACT])
-        self.type : str ['E' | 'I'] = 'E'
-        self.neighbors : List[Neuron] = None
+    def __init__(self, cell_type = None, neighbors = None) -> None:
+        self.phase_output = [2, randint(0,10), randint(0,10), randint(0,10), 
+                             randint(0,5)]
+        for _ in range (6):
+            self.phase_output.append( self.phase_output[-1] ) 
+        self.AP = randint(0,10)
+        self.state = self.phase_output[self.AP]
+        self.type : str ['E' | 'I'] = cell_type if cell_type != None else 'E'
+        self.neighbors : List[Neuron] = neighbors
 
     def set_neighbors(self, neighbors) -> None:
         self.neighbors = neighbors
@@ -55,19 +45,7 @@ class Neuron:
         self.type = 'I'
     
     def update_state(self):
-        if self.AP == 0:
-            self.state = Phase.REST
-            return
-        if self.AP < 5:
-            self.state = Phase.FIRE
-            return
-        if self.AP < 6:
-            self.state = Phase.HYPER
-            return
-        if self.AP <=10:
-            self.state = Phase.REFRACT
-            return
-
+        self.state = self.phase_output[self.AP]
 
 class Neuronal_Lattice:
 
@@ -82,6 +60,7 @@ class Neuronal_Lattice:
         self.a = a
         self.perc_i = percent_inhibit
         self.init_lattice(lattice_size)
+        self.time_series: List[float] = []
 
         self.lattice_wide = lambda f: [[f(cell) for cell in row] for row in self.lattice]
 
@@ -102,9 +81,9 @@ class Neuronal_Lattice:
         for inhibitory in np.random.choice(cells, num_inhibit):
             inhibitory.set_inhibitory()
 
-        num = len(cells)
-        x = Counter([Phase.get_phase(c.AP) for c in cells])
-        [print(f'{y}: {(x[y]/num)*100:.0f}%') for y in x]
+        #num = len(cells)
+        #x = Counter([c.phase_output[c.AP] for c in cells])
+        #[print(f'{y}: {(x[y]/num)*100:.0f}%') for y in x]
 
         return self.lattice
     
@@ -116,7 +95,7 @@ class Neuronal_Lattice:
         * **cell** Neuron: The cell we are setting the neighbors for
         '''
 
-        N = np.random.randint(self.N_min, self.N_max)
+        N = randint(self.N_min, self.N_max)
         neighbors = []
         for _ in range(N):
             rand_row = choice(self.lattice)
@@ -139,8 +118,8 @@ class Neuronal_Lattice:
         * **cell** Neuron: the cell for which we are calculating the next state.
         '''
         tr = self.T_rest if cell.state == 0 else self.T_rel
-        n_cell = cell
-        n_cell.AP = Phase().transition(cell.AP, cell.neighbors, tr, self.a)
+        n_cell = Neuron(cell.type, cell.neighbors)
+        n_cell.AP = Phase.transition(cell.AP, cell.neighbors, tr, self.a)
         n_cell.update_state()
         return n_cell
         
@@ -151,27 +130,51 @@ class Neuronal_Lattice:
         state_view = [[cell.state for cell in row] for row in self.lattice]
         return state_view
 
-        
+    def add_y(self, t):
+        cells = sum(self.lattice, [])
+        y = sum([cell.state for cell in cells])
+
+        self.time_series.append(y)
 
 
 #%% Entry Point
 if __name__ == '__main__':
-    # generate lattice
-    SIZE = 20
-    NL = Neuronal_Lattice(SIZE, a=0.1, percent_inhibit=0.2)
+    SIZE = 40
+    NL = Neuronal_Lattice(SIZE, N_min=3, N_Max=5, T_rel=2, T_rest=1, a=0.1)
     ITERATIONS = 100
 
     fig , ax = plt.subplots()
     init_states = NL.states()
-    img = ax.imshow(init_states, cmap='gray', interpolation='nearest')
+    img = ax.imshow(init_states, cmap='gray', interpolation='antialiased')
     
-    def update(f):
+    def update(t):
         NL.update_lattice()
         mat = NL.states()
         img.set_array(mat)
+
+        NL.add_y(t)
+        
         return [img]
     
-    #[[print(cell.AP) for cell in row] for row in NL.lattice]
-    animation = FuncAnimation(fig, update, frames=ITERATIONS,repeat=True, interval=10, blit=True)
+    animation = FuncAnimation(fig, update, frames=ITERATIONS, repeat=False, interval=10, blit=True)
     plt.show()
-            
+
+    fig_xy  = plt.figure(figsize=(10,10))
+    ax_xy = fig_xy.add_subplot(111)
+    ax_xy.get_autoscalex_on()
+    ax_xy.get_autoscaley_on()
+    ax_xy.set_xlabel('x', fontsize=15)
+    ax_xy.set_ylabel('y', fontsize=15)
+    ax_xy.set_title(f'Goop', fontsize=25)
+    ax_xy.plot(NL.time_series, 'b-', lw=0.5)
+    plt.show()
+
+    #pprint(NL.time_series)
+    f, Pxx_den = signal.welch(NL.time_series, window='hann')
+    plt.semilogy(f, Pxx_den)
+
+    #plt.ylim([1, 1])
+    
+    plt.xlabel('frequency [Hz]')
+    plt.ylabel('PSD [V**2/Hz]')
+    plt.show()
