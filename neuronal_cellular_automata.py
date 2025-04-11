@@ -1,24 +1,18 @@
 import numpy as np
 from matplotlib import pyplot as plt
 from random import choice, randint
-from collections import Counter
 from typing import List, Tuple, Any
 from  matplotlib.animation import FuncAnimation
 
 from scipy import signal
 
 class Phase:
-
-    #    AP   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     
-
-    def transition(AP, n ,Tr, a):
-        if AP == 10: 
-            next_AP = 0 if Phase.exceed_tr(n, Tr, a) else AP 
-            return next_AP
+    def transition(AP:int, n:List, Tr:float, a:float):
+        if Phase.exceed_tr(n, Tr, a):
+            return 0 if AP == 10 else AP+1
         else:
-            next_AP = AP+1 if Phase.exceed_tr(n, Tr, a) else AP 
-            return next_AP
+            return AP
         
     def exceed_tr(neighbors:List, tr:float, a:float)-> bool:
         n_ex = sum([c.state for c in neighbors if c.type == 'E' and c.AP in (1, 2, 3, 4)])
@@ -28,12 +22,15 @@ class Phase:
 
 
 class Neuron:
-    def __init__(self, cell_type = None, neighbors = None) -> None:
-        self.phase_output = [2, randint(0,10), randint(0,10), randint(0,10), 
-                             randint(0,5)]
+    def __init__(self, po:List[float]=None, ap=None, cell_type=None, neighbors=None, loc=None) -> None:
+        
+        self.phase_output = po if po != None else [randint(5,10), randint(10,20), 
+                                                   randint(20,30), randint(0,5), 
+                                                   randint(5,10)]
+        
         for _ in range (6):
             self.phase_output.append( self.phase_output[-1] ) 
-        self.AP = randint(0,10)
+        self.AP = ap if ap != None else randint(0,10)
         self.state = self.phase_output[self.AP]
         self.type : str ['E' | 'I'] = cell_type if cell_type != None else 'E'
         self.neighbors : List[Neuron] = neighbors
@@ -49,7 +46,7 @@ class Neuron:
 
 class Neuronal_Lattice:
 
-    def __init__(self, lattice_size:int, T_rest:float=8, T_rel:float=12, N_min:int=14, N_Max:int=61, a:float=0.2, percent_inhibit:float = 0.2):
+    def __init__(self, lattice_size:int, T_rest:float=8, T_rel:float=12, N_min:int=14, N_Max:int=60, a:float=0.2, percent_inhibit:float = 0.2):
         '''
         Initialize our CA
         '''
@@ -71,7 +68,7 @@ class Neuronal_Lattice:
         if size**2 < self.N_max: 
             raise ValueError('Total # of cells in lattice must be larger than N_Max')
         
-        self.lattice = [[ Neuron() for _ in range (size)] for _ in range (size)]
+        self.lattice = [[ Neuron(loc = (x,y)) for x in range(size)] for y in range(size)]
         cells = sum(self.lattice, [])
 
         for cell in cells:
@@ -97,9 +94,10 @@ class Neuronal_Lattice:
 
         N = randint(self.N_min, self.N_max)
         neighbors = []
-        for _ in range(N):
+        while len(neighbors) <= N:
             rand_row = choice(self.lattice)
             rand_cell = choice(rand_row)
+            #n_dist = np.linalg.norm(np.array(cell.loc) - np.array(rand_cell.loc))
             if rand_cell not in neighbors and rand_cell != cell:
                 neighbors.append(rand_cell)
         cell.set_neighbors(neighbors)
@@ -118,7 +116,7 @@ class Neuronal_Lattice:
         * **cell** Neuron: the cell for which we are calculating the next state.
         '''
         tr = self.T_rest if cell.state == 0 else self.T_rel
-        n_cell = Neuron(cell.type, cell.neighbors)
+        n_cell = Neuron(ap=cell.AP, cell_type=cell.type, neighbors=cell.neighbors)
         n_cell.AP = Phase.transition(cell.AP, cell.neighbors, tr, self.a)
         n_cell.update_state()
         return n_cell
@@ -132,7 +130,7 @@ class Neuronal_Lattice:
 
     def add_y(self, t):
         cells = sum(self.lattice, [])
-        y = sum([cell.state for cell in cells])
+        y = sum([cell.state  for cell in cells])#* sum([p for p in cell.phase_output])
 
         self.time_series.append(y)
 
@@ -140,8 +138,18 @@ class Neuronal_Lattice:
 #%% Entry Point
 if __name__ == '__main__':
     SIZE = 40
-    NL = Neuronal_Lattice(SIZE, N_min=3, N_Max=5, T_rel=2, T_rest=1, a=0.1)
-    ITERATIONS = 100
+    
+    #Base Case
+    #NL = Neuronal_Lattice(SIZE)
+    
+    #Test Case 1 with Pathing
+    #NL = Neuronal_Lattice(SIZE, N_min=60, N_Max=65, T_rel=150, T_rest=100, a=4)
+    
+    #NL = Neuronal_Lattice(SIZE, N_min=60, N_Max=65, T_rel=40, T_rest=30, a=1.5)
+    NL = Neuronal_Lattice(SIZE)
+    
+    
+    ITERATIONS = 300
 
     fig , ax = plt.subplots()
     init_states = NL.states()
@@ -156,25 +164,27 @@ if __name__ == '__main__':
         
         return [img]
     
-    animation = FuncAnimation(fig, update, frames=ITERATIONS, repeat=False, interval=10, blit=True)
+    animation = FuncAnimation(fig, update, frames=ITERATIONS, repeat=False, interval=5, blit=True)
     plt.show()
 
-    fig_xy  = plt.figure(figsize=(10,10))
+    fig_xy  = plt.figure(figsize=(10,5))
     ax_xy = fig_xy.add_subplot(111)
     ax_xy.get_autoscalex_on()
     ax_xy.get_autoscaley_on()
     ax_xy.set_xlabel('x', fontsize=15)
     ax_xy.set_ylabel('y', fontsize=15)
-    ax_xy.set_title(f'Goop', fontsize=25)
+    ax_xy.set_title(f'Neuron Activity', fontsize=25)
     ax_xy.plot(NL.time_series, 'b-', lw=0.5)
     plt.show()
 
     #pprint(NL.time_series)
-    f, Pxx_den = signal.welch(NL.time_series, window='hann')
-    plt.semilogy(f, Pxx_den)
+    f, Pxx_den = signal.welch(NL.time_series, window='hann',fs=60)
+   
 
-    #plt.ylim([1, 1])
+    #f, Pxx_den = signal.periodogram(NL.time_series )
+    
+    plt.semilogy(f, Pxx_den)
     
     plt.xlabel('frequency [Hz]')
-    plt.ylabel('PSD [V**2/Hz]')
+    plt.ylabel('Power Spectrum Density (PSD)')
     plt.show()
